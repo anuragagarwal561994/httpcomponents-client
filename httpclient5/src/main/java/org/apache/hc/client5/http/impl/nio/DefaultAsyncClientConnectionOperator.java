@@ -73,6 +73,7 @@ final class DefaultAsyncClientConnectionOperator implements AsyncClientConnectio
             final HttpHost host,
             final SocketAddress localAddress,
             final Timeout connectTimeout,
+            final Timeout handshakeTimeout,
             final Object attachment,
             final FutureCallback<ManagedAsyncClientConnection> callback) {
         Args.notNull(connectionInitiator, "Connection initiator");
@@ -95,15 +96,17 @@ final class DefaultAsyncClientConnectionOperator implements AsyncClientConnectio
                         final DefaultManagedAsyncClientConnection connection = new DefaultManagedAsyncClientConnection(session);
                         if (tlsStrategy != null && URIScheme.HTTPS.same(host.getSchemeName())) {
                             try {
+                                final Timeout socketTimeout = connection.getSocketTimeout();
                                 tlsStrategy.upgrade(
                                         connection,
                                         host,
                                         attachment,
-                                        null,
+                                        handshakeTimeout != null ? handshakeTimeout : connectTimeout,
                                         new FutureContribution<TransportSecurityLayer>(future) {
 
                                             @Override
                                             public void completed(final TransportSecurityLayer transportSecurityLayer) {
+                                                connection.setSocketTimeout(socketTimeout);
                                                 future.completed(connection);
                                             }
 
@@ -132,17 +135,29 @@ final class DefaultAsyncClientConnectionOperator implements AsyncClientConnectio
     }
 
     @Override
-    public void upgrade(
-            final ManagedAsyncClientConnection connection,
+    public Future<ManagedAsyncClientConnection> connect(
+            final ConnectionInitiator connectionInitiator,
             final HttpHost host,
-            final Object attachment) {
-        upgrade(connection, host, attachment, null);
+            final SocketAddress localAddress,
+            final Timeout connectTimeout,
+            final Object attachment,
+            final FutureCallback<ManagedAsyncClientConnection> callback) {
+        return connect(connectionInitiator, host, localAddress, connectTimeout, connectTimeout, attachment, callback);
     }
 
     @Override
     public void upgrade(
             final ManagedAsyncClientConnection connection,
             final HttpHost host,
+            final Object attachment) {
+        upgrade(connection, host, null, attachment, null);
+    }
+
+    @Override
+    public void upgrade(
+            final ManagedAsyncClientConnection connection,
+            final HttpHost host,
+            final Timeout handshakeTimeout,
             final Object attachment,
             final FutureCallback<ManagedAsyncClientConnection> callback) {
         final TlsStrategy tlsStrategy = tlsStrategyLookup != null ? tlsStrategyLookup.lookup(host.getSchemeName()) : null;
@@ -151,7 +166,7 @@ final class DefaultAsyncClientConnectionOperator implements AsyncClientConnectio
                     connection,
                     host,
                     attachment,
-                    null,
+                    handshakeTimeout,
                     new CallbackContribution<TransportSecurityLayer>(callback) {
 
                         @Override

@@ -401,6 +401,7 @@ public class PoolingAsyncClientConnectionManager implements AsyncClientConnectio
         final InetSocketAddress localAddress = route.getLocalSocketAddress();
         final ConnectionConfig connectionConfig = resolveConnectionConfig(route);
         final Timeout connectTimeout = timeout != null ? timeout : connectionConfig.getConnectTimeout();
+        final Timeout handshakeTimeout = connectionConfig.getHandshakeTimeout();
 
         if (LOG.isDebugEnabled()) {
             LOG.debug("{} connecting endpoint to {} ({})", ConnPoolSupport.getId(endpoint), host, connectTimeout);
@@ -410,6 +411,7 @@ public class PoolingAsyncClientConnectionManager implements AsyncClientConnectio
                 host,
                 localAddress,
                 connectTimeout,
+                handshakeTimeout,
                 route.isTunnelled() ? HttpVersionPolicy.FORCE_HTTP_1 : attachment,
                 new FutureCallback<ManagedAsyncClientConnection>() {
 
@@ -455,9 +457,12 @@ public class PoolingAsyncClientConnectionManager implements AsyncClientConnectio
         final InternalConnectionEndpoint internalEndpoint = cast(endpoint);
         final PoolEntry<HttpRoute, ManagedAsyncClientConnection> poolEntry = internalEndpoint.getValidatedPoolEntry();
         final HttpRoute route = poolEntry.getRoute();
+        final ConnectionConfig connectionConfig = resolveConnectionConfig(route);
+        final Timeout handshakeTimeout = connectionConfig.getHandshakeTimeout();
         connectionOperator.upgrade(
                 poolEntry.getConnection(),
                 route.getTargetHost(),
+                handshakeTimeout,
                 attachment,
                 new CallbackContribution<ManagedAsyncClientConnection>(callback) {
 
